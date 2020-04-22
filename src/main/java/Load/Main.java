@@ -3,11 +3,18 @@ package Load;
 import org.apache.spark.SparkConf;
 import org.apache.spark.SparkContext;
 import org.apache.spark.api.java.JavaPairRDD;
+import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.sql.DataFrameReader;
-import org.apache.spark.sql.Dataset;
-import org.apache.spark.sql.Row;
-import org.apache.spark.sql.SQLContext;
+import org.apache.spark.api.java.function.FilterFunction;
+import org.apache.spark.api.java.function.Function;
+import org.apache.spark.rdd.RDD;
+import org.apache.spark.sql.*;
+import org.apache.spark.sql.types.DataTypes;
+import scala.Tuple2;
+
+import java.io.Serializable;
+import java.util.List;
+import java.util.Properties;
 
 public class Main {
 
@@ -18,18 +25,62 @@ public class Main {
             sc.hadoopConfiguration().set("fs.s3a.access.key", SecretsConst.YOS_ACCESS_KEY);
             sc.hadoopConfiguration().set("fs.s3a.secret.key",SecretsConst.YOS_SECRET_KEY);
 
+
         SQLContext  sqlCs = new SQLContext(sc);
-        Dataset<Row> df = sqlCs
-                    .read()
-                    .option("header", "true")
-                    .option("mode", "DROPMALFORMED")
-                    .schema(CsvSchemaType.CsvSchema)
-                    .csv(SecretsConst.YOS_BUCKET_PATH)
-                .toDF();
-        System.out.println(df.count());
 
-        df.createOrReplaceTempView("csvTelemetry");
-        df.sqlContext().sql("SELECT PartitionKey, count(RowKey) as RowsCount FROM csvTelemetry WHERE GROUP BY PartitionKey").show();
+        Dataset<Row> csvFilesList = sqlCs.read()
+                .option("header", "true")
+                .option("inferSchema", "true")
+                .option("mode", "DROPMALFORMED")
+                .option("delimiter", ",")
+                .schema(CsvSchemaType.CsvSchema)
+                .csv(SecretsConst.YOS_BUCKET_PATH);
+        System.out.println(csvFilesList.count());
+        System.out.println(csvFilesList.schema().toString());
 
+        csvFilesList.show();
+
+        if (csvFilesList.count() > 0) {
+
+            csvFilesList.createOrReplaceTempView("tempCsvTelemetry");
+
+            /*Saving data to a JDBC source*/
+            Properties connectionProperties = new Properties();
+            //connectionProperties.put("driver","com.microsoft.sqlserver.jdbc.SQLServerDriver");
+            connectionProperties.put("driver", "org.postgresql.Driver");
+            connectionProperties.put("user", SecretsConst.POSTGRE_USER);
+            connectionProperties.put("password", SecretsConst.POSTGRE_PWD);
+
+
+            csvFilesList.sqlContext()
+                    .sql("SELECT cast(PartitionKey as varchar(50)) as device_id, RowKey as seconds_counter, Timestamp," +
+                            " accel_pedal_position, alarm_event, altitude, ambient_air_temperature, battery_soc, battery_voltage   FROM tempCsvTelemetry")
+                    .write() // Specifying create table column data types on write
+                    .mode("append")
+                    .jdbc(SecretsConst.JDBC_PROVIDER_URL, "public.CsvImportAuto", connectionProperties);
+        }
+    }
+
+    private static List<String> GetCsvFileList(SparkContext sc, String bucklePath) {
+        JavaSparkContext context = new JavaSparkContext(sc);
+        JavaPairRDD<String, String> wholeDirectoryRDD = context
+                .wholeTextFiles(bucklePath,4);
+
+        JavaRDD<String> lineCounts = wholeDirectoryRDD
+                .filter(new Function<Tuple2<String, String>, Boolean>() { // Filter schema files
+                    @Override
+                    public Boolean call(Tuple2<String, String> fileNameContent) throws Exception {
+                        return (!fileNameContent._1().endsWith(".schema.csv"));
+                    }
+                })
+                .map(new Function<Tuple2<String, String>, String>(){
+                    @Override
+                    public String call(Tuple2<String, String> fileNameContent) throws Exception {
+                        return fileNameContent._1;
+                    }
+
+                });
+
+                return lineCounts.collect();
     }
 }
