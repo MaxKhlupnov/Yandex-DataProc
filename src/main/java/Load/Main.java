@@ -30,8 +30,10 @@ public class Main {
 
         Dataset<Row> csvFilesList = sqlCs.read()
                 .option("header", "true")
-                .option("inferSchema", "true")
-                .option("mode", "DROPMALFORMED")
+          //      .option("inferSchema", "true")
+         //       .option("mode", "DROPMALFORMED")
+                .option("partitionColumn","PartitionKey")
+                .option("fetchsize","10000")
                 .option("delimiter", ",")
                 .schema(CsvSchemaType.CsvSchema)
                 .csv(SecretsConst.YOS_BUCKET_PATH);
@@ -53,9 +55,12 @@ public class Main {
 
 
             csvFilesList.sqlContext()
-                    .sql("SELECT cast(PartitionKey as varchar(50)) as device_id, RowKey as seconds_counter, Timestamp," +
+                    .sql("SELECT cast(PartitionKey as varchar(50)) as device_id, cast(RowKey as int) as seconds_counter, Timestamp," +
                             " accel_pedal_position, alarm_event, altitude, ambient_air_temperature, battery_soc, battery_voltage   FROM tempCsvTelemetry")
                     .write() // Specifying create table column data types on write
+                    .option("createTableColumnTypes","device_id  VARCHAR (50), seconds_counter INT, Timestamp TIMESTAMP," +
+                            "    accel_pedal_position  INT, altitude  FLOAT, battery_voltage  FLOAT")
+                    .option("batchsize","10000")
                     .mode("append")
                     .jdbc(SecretsConst.JDBC_PROVIDER_URL, "public.CsvImportAuto", connectionProperties);
         }
