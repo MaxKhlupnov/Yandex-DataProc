@@ -1,0 +1,11 @@
+<component name="ArtifactManager">
+  <artifact build-on-make="true" name="artifact">
+    <output-path>$PROJECT_DIR$/out/artifacts/artifact</output-path>
+    <root id="root">
+      <element id="module-output" name="S3aCsv" />
+      <element id="library" level="project" name="Maven: org.postgresql:postgresql:42.2.12" />
+      <element id="library" level="project" name="Maven: org.apache.hadoop:hadoop-aws:2.10.0" />
+      <element id="library" level="project" name="Maven: ru.yandex.clickhouse:clickhouse-jdbc:0.2.4" />
+    </root>
+  </artifact>
+</component>
