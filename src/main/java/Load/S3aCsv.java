@@ -41,14 +41,13 @@ public class S3aCsv {
         System.out.println(csvFilesList.schema().toString());
 
         csvFilesList.show();
-        System.out.println("Hello, world!");
+
         if (csvFilesList.count() > 0) {
 
             csvFilesList.createOrReplaceTempView("tempCsvTelemetry");
 
             //Saving data to a JDBC source
             Properties connectionProperties = new Properties();
-            //connectionProperties.put("driver","com.microsoft.sqlserver.jdbc.SQLServerDriver");
             connectionProperties.put("driver", "org.postgresql.Driver");
             connectionProperties.put("user", SecretsConst.POSTGRE_USER);
             connectionProperties.put("password", SecretsConst.POSTGRE_PWD);
@@ -66,26 +65,4 @@ public class S3aCsv {
         }
     }
 
-    private static List<String> GetCsvFileList(SparkContext sc, String bucklePath) {
-        JavaSparkContext context = new JavaSparkContext(sc);
-        JavaPairRDD<String, String> wholeDirectoryRDD = context
-                .wholeTextFiles(bucklePath,4);
-
-        JavaRDD<String> lineCounts = wholeDirectoryRDD
-                .filter(new Function<Tuple2<String, String>, Boolean>() { // Filter schema files
-                    @Override
-                    public Boolean call(Tuple2<String, String> fileNameContent) throws Exception {
-                        return (!fileNameContent._1().endsWith(".schema.csv"));
-                    }
-                })
-                .map(new Function<Tuple2<String, String>, String>(){
-                    @Override
-                    public String call(Tuple2<String, String> fileNameContent) throws Exception {
-                        return fileNameContent._1;
-                    }
-
-                });
-
-                return lineCounts.collect();
-    }
 }
